@@ -775,6 +775,23 @@ module Puppet
 
             remove_existing(:file)
 
+          bfile = File.join(Puppet[:vardir], 'original', self[:path]);
+          begin
+            File.open(bfile) {|f|
+              original_content = f.read
+              File.open(self[:path]) { |f2|
+                current_content = f2.read
+                if (current_content != original_content)
+                  # updated in the client
+                  Puppet.warning(self[:path] + " is overwritten by puppet which was updated locally by hand: manual updated file:\n " + current_content)
+                end
+              }
+            }
+          rescue
+            # TODO: must not resucue everything
+          end
+
+
             use_temporary_file = (content.length != 0)
             path = self[:path]
             path += ".puppettmp" if use_temporary_file
@@ -797,6 +814,21 @@ module Puppet
                     # Make sure the created file gets removed
                     File.unlink(path) if FileTest.exists?(path)
                 end
+
+
+              # create dir/file for original file, which comes from puppet server
+              bpath = File.dirname(bfile)
+              unless FileTest.directory?(bpath)
+                Puppet::Util.withumask(0007) do
+                  FileUtils.mkdir_p(bpath)
+                end
+              end
+              
+              Puppet::Util.withumask(0007) do
+                File.open(bfile, File::WRONLY|File::CREAT) { |of|
+                  of.print content
+                }
+              end
             end
 
             # make sure all of the modes are actually correct
